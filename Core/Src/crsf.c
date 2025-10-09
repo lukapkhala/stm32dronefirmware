@@ -67,7 +67,7 @@ static void crsf_decode_rc(CRSF_t *crsf, const uint8_t *p, uint8_t len, uint32_t
         acc  |= (uint32_t)p[i] << bits;
         bits += 8;
         while (bits >= 11 && k < N) {
-            crsf->data.channels[k++] = 1000 + (((uint16_t)(acc & 0x07FFu) - CRSF_MIN) * 1000) / (CRSF_MAX - CRSF_MIN);
+            crsf->data.channels[k++] = 1000 + (((uint16_t)(acc & 0x07FFu) - CRSF_MIN) * 1000.0) / (CRSF_MAX - CRSF_MIN);
 
             acc >>= 11;
             bits -= 11;
