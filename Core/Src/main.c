@@ -46,6 +46,7 @@
 /* Private variables ---------------------------------------------------------*/
 SPI_HandleTypeDef hspi1;
 
+TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim3;
 
 UART_HandleTypeDef huart1;
@@ -67,6 +68,7 @@ static void MX_USART2_UART_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_TIM3_Init(void);
+static void MX_TIM2_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -97,15 +99,13 @@ void print_att(attitude_t *att) {
 	print(buf);
 }
 
-void ESC_Write_us(uint16_t us)
-{
-    // Clamp between 1000–2000 µs (typical ESC range)
-    if (us < 1000) us = 1000;
-    if (us > 2000) us = 2000;
-
-    __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, us);
+void ESC_Write_us(TIM_HandleTypeDef *htim, uint32_t channel, uint16_t us) {
+	if (us < 1000)
+		us = 1000;
+	if (us > 2000)
+		us = 2000;
+	__HAL_TIM_SET_COMPARE(htim, channel, us);
 }
-
 uint8_t rxBuf[128];
 /* USER CODE END 0 */
 
@@ -142,12 +142,16 @@ int main(void) {
 	MX_SPI1_Init();
 	MX_USART1_UART_Init();
 	MX_TIM3_Init();
+	MX_TIM2_Init();
 	/* USER CODE BEGIN 2 */
 	CRSF_Init(&crsf);  // <- sets neutral channels, clears state, valid=false
 	HAL_UARTEx_ReceiveToIdle_DMA(&huart1, rxBuf, sizeof(rxBuf));
 	__HAL_DMA_DISABLE_IT(huart1.hdmarx, DMA_IT_HT);
 
-	HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
+	HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1); // M1
+	HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1); // M2
+	HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2); // M3
+	HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_3); // M4
 
 //	icm_scaled_t data;
 //	attitude_t att = { 0 };
@@ -158,7 +162,10 @@ int main(void) {
 //		Error_Handler();
 //	}
 	print("Arming ESC...\r\n");
-	ESC_Write_us(1000);     // Minimum throttle
+	ESC_Write_us(&htim3, TIM_CHANNEL_1, 1000);
+	ESC_Write_us(&htim2, TIM_CHANNEL_1, 1000);
+	ESC_Write_us(&htim2, TIM_CHANNEL_2, 1000);
+	ESC_Write_us(&htim2, TIM_CHANNEL_3, 1000);
 	HAL_Delay(3000);        // Wait 3 s for ESC to beep/arm
 	print("ESC armed.\r\n");
 	/* USER CODE END 2 */
@@ -175,7 +182,10 @@ int main(void) {
 		}
 
 		if (crsf.data.valid) {
-			ESC_Write_us(crsf.data.channels[2]);
+			ESC_Write_us(&htim3, TIM_CHANNEL_1, crsf.data.channels[2]);
+			ESC_Write_us(&htim2, TIM_CHANNEL_1, crsf.data.channels[2]);
+			ESC_Write_us(&htim2, TIM_CHANNEL_2, crsf.data.channels[2]);
+			ESC_Write_us(&htim2, TIM_CHANNEL_3, crsf.data.channels[2]);
 //			char buf[80];
 //			snprintf(buf, sizeof(buf),
 //					"CH1:%u CH2:%u CH3:%u CH4:%u CH5:%u CH6:%u \r\n",
@@ -279,6 +289,61 @@ static void MX_SPI1_Init(void) {
 	/* USER CODE BEGIN SPI1_Init 2 */
 
 	/* USER CODE END SPI1_Init 2 */
+
+}
+
+/**
+ * @brief TIM2 Initialization Function
+ * @param None
+ * @retval None
+ */
+static void MX_TIM2_Init(void) {
+
+	/* USER CODE BEGIN TIM2_Init 0 */
+
+	/* USER CODE END TIM2_Init 0 */
+
+	TIM_MasterConfigTypeDef sMasterConfig = { 0 };
+	TIM_OC_InitTypeDef sConfigOC = { 0 };
+
+	/* USER CODE BEGIN TIM2_Init 1 */
+
+	/* USER CODE END TIM2_Init 1 */
+	htim2.Instance = TIM2;
+	htim2.Init.Prescaler = 83;
+	htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
+	htim2.Init.Period = 19999;
+	htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+	htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
+	if (HAL_TIM_PWM_Init(&htim2) != HAL_OK) {
+		Error_Handler();
+	}
+	sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+	sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+	if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig)
+			!= HAL_OK) {
+		Error_Handler();
+	}
+	sConfigOC.OCMode = TIM_OCMODE_PWM1;
+	sConfigOC.Pulse = 0;
+	sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+	sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+	if (HAL_TIM_PWM_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_1)
+			!= HAL_OK) {
+		Error_Handler();
+	}
+	if (HAL_TIM_PWM_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_2)
+			!= HAL_OK) {
+		Error_Handler();
+	}
+	if (HAL_TIM_PWM_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_3)
+			!= HAL_OK) {
+		Error_Handler();
+	}
+	/* USER CODE BEGIN TIM2_Init 2 */
+
+	/* USER CODE END TIM2_Init 2 */
+	HAL_TIM_MspPostInit(&htim2);
 
 }
 
