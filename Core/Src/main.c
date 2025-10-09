@@ -78,7 +78,7 @@ void print(const char *s) {
 	HAL_UART_Transmit(&huart2, (uint8_t*) s, strlen(s), HAL_MAX_DELAY);
 }
 
-void print_data(icm_scaled_t *data) {
+void print_icm_data(icm_scaled_t *data) {
 	char buf[128];
 	snprintf(buf, sizeof(buf), "AX:%6d AY:%6d AZ:%6d mg | "
 			"GX:%6d GY:%6d GZ:%6d mdps | "
@@ -89,7 +89,7 @@ void print_data(icm_scaled_t *data) {
 	print(buf);
 }
 
-void print_angles(attitude_t *att) {
+void print_att(attitude_t *att) {
 	char buf[128];
 	snprintf(buf, sizeof(buf), "Roll: %.2f Pitch: %.2f\r\n",
 			att->roll * 57.2958f, att->pitch * 57.2958f);
@@ -196,7 +196,7 @@ int main(void) {
 //
 //		complementary_filter(&data, &att, dt);
 //
-//		print_angles(&att);
+//		print_att(&att);
 //
 //		HAL_Delay(1);
 	}
