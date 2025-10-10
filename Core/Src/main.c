@@ -106,6 +106,11 @@ void ESC_Write_us(TIM_HandleTypeDef *htim, uint32_t channel, uint16_t us) {
 		us = 2000;
 	__HAL_TIM_SET_COMPARE(htim, channel, us);
 }
+
+float rc_to_rate(uint16_t ch, float scale) {
+	return ((float) ch - 1500.0f) / 500.0f * scale;  // e.g. scale = 200
+}
+
 uint8_t rxBuf[128];
 /* USER CODE END 0 */
 
@@ -144,6 +149,12 @@ int main(void) {
 	MX_TIM3_Init();
 	MX_TIM2_Init();
 	/* USER CODE BEGIN 2 */
+	PID_t pid_roll = { .kp = 3.0f, .ki = 0.8f, .kd = 0.05f };
+	PID_t pid_pitch = { .kp = 3.0f, .ki = 0.8f, .kd = 0.05f };
+	PID_t pid_yaw = { .kp = 1.0f, .ki = 0.3f, .kd = 0.02f };
+
+	uint32_t last_t = 0;
+
 	CRSF_Init(&crsf);  // <- sets neutral channels, clears state, valid=false
 	HAL_UARTEx_ReceiveToIdle_DMA(&huart1, rxBuf, sizeof(rxBuf));
 	__HAL_DMA_DISABLE_IT(huart1.hdmarx, DMA_IT_HT);
@@ -153,14 +164,15 @@ int main(void) {
 	HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2); // M3
 	HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_3); // M4
 
-//	icm_scaled_t data;
+	icm_scaled_t data;
 //	attitude_t att = { 0 };
-//	uint32_t last = HAL_GetTick();
+// uint32_t last = HAL_GetTick();
 
-//	if (ICM_init(&hspi1, &data)) {
-//		print("ICM didn't initialize");
-//		Error_Handler();
-//	}
+	if (ICM_init(&hspi1, &data)) {
+		print("ICM didn't initialize");
+		Error_Handler();
+	}
+
 	print("Arming ESC...\r\n");
 	ESC_Write_us(&htim3, TIM_CHANNEL_1, 1000);
 	ESC_Write_us(&htim2, TIM_CHANNEL_1, 1000);
@@ -182,23 +194,55 @@ int main(void) {
 		}
 
 		if (crsf.data.valid) {
-			ESC_Write_us(&htim3, TIM_CHANNEL_1, crsf.data.channels[2]);
-			ESC_Write_us(&htim2, TIM_CHANNEL_1, crsf.data.channels[2]);
-			ESC_Write_us(&htim2, TIM_CHANNEL_2, crsf.data.channels[2]);
-			ESC_Write_us(&htim2, TIM_CHANNEL_3, crsf.data.channels[2]);
-//			char buf[80];
-//			snprintf(buf, sizeof(buf),
-//					"CH1:%u CH2:%u CH3:%u CH4:%u CH5:%u CH6:%u \r\n",
-//					crsf.data.channels[0], crsf.data.channels[1],
-//					crsf.data.channels[2], crsf.data.channels[3],
-//					crsf.data.channels[4], crsf.data.channels[5]);
-//			print(buf);
+			float target_roll_rate = rc_to_rate(crsf.data.channels[0], 200.0f);
+			float target_pitch_rate = rc_to_rate(crsf.data.channels[1], 200.0f);
+			float target_yaw_rate = rc_to_rate(crsf.data.channels[3], 200.0f);
+			float throttle = crsf.data.channels[2]; // 1000–2000 µs
+
+			ICM_read_all(&hspi1, &data);
+
+			float roll_error = target_roll_rate - data.gx;
+			float pitch_error = target_pitch_rate - data.gy;
+			float yaw_error = target_yaw_rate - data.gz;
+
+			float roll_out = PID_Update(&pid_roll, roll_error, dt);
+			float pitch_out = PID_Update(&pid_pitch, pitch_error, dt);
+			float yaw_out = PID_Update(&pid_yaw, yaw_error, dt);
+
+			float m1 = throttle + roll_out + pitch_out - yaw_out; // front-right
+			float m2 = throttle - roll_out + pitch_out + yaw_out; // front-left
+			float m3 = throttle - roll_out - pitch_out - yaw_out; // rear-left
+			float m4 = throttle + roll_out - pitch_out + yaw_out; // rear-right
+
+
+			if (m1 < 1000)
+				m1 = 1000;
+			else if (m1 > 2000)
+				m1 = 2000;
+			if (m2 < 1000)
+				m2 = 1000;
+			else if (m2 > 2000)
+				m2 = 2000;
+			if (m3 < 1000)
+				m3 = 1000;
+			else if (m3 > 2000)
+				m3 = 2000;
+			if (m4 < 1000)
+				m4 = 1000;
+			else if (m4 > 2000)
+				m4 = 2000;
+
+
+			ESC_Write_us(&htim3, TIM_CHANNEL_1, (uint16_t) m1);
+			ESC_Write_us(&htim2, TIM_CHANNEL_1, (uint16_t) m2);
+			ESC_Write_us(&htim2, TIM_CHANNEL_2, (uint16_t) m3);
+			ESC_Write_us(&htim2, TIM_CHANNEL_3, (uint16_t) m4);
+
 		} else {
 			print("waiting CRSF...\r\n");
 		}
 		HAL_Delay(50);
 
-		//		ICM_read_all(&hspi1, &data);
 //
 //		uint32_t now = HAL_GetTick();
 //		float dt = (now - last) / 1000.0f;
@@ -208,7 +252,7 @@ int main(void) {
 //
 //		print_att(&att);
 //
-//		HAL_Delay(1);
+		HAL_Delay(1);
 	}
 	/* USER CODE END 3 */
 }
