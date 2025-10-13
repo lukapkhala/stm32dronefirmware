@@ -26,6 +26,7 @@
 
 #include "filter.h"
 #include "crsf.h"
+#include "pid.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -153,7 +154,7 @@ int main(void) {
 	PID_t pid_pitch = { .kp = 3.0f, .ki = 0.8f, .kd = 0.05f };
 	PID_t pid_yaw = { .kp = 1.0f, .ki = 0.3f, .kd = 0.02f };
 
-	uint32_t last_t = 0;
+	uint32_t last_t = HAL_GetTick();
 
 	CRSF_Init(&crsf);  // <- sets neutral channels, clears state, valid=false
 	HAL_UARTEx_ReceiveToIdle_DMA(&huart1, rxBuf, sizeof(rxBuf));
@@ -164,12 +165,10 @@ int main(void) {
 	HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2); // M3
 	HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_3); // M4
 
+	/* IMU init */
 	icm_scaled_t data;
-//	attitude_t att = { 0 };
-// uint32_t last = HAL_GetTick();
-
 	if (ICM_init(&hspi1, &data)) {
-		print("ICM didn't initialize");
+		print("ICM didn't initialize\r\n");
 		Error_Handler();
 	}
 
@@ -189,6 +188,12 @@ int main(void) {
 
 		/* USER CODE BEGIN 3 */
 		uint32_t now = HAL_GetTick();
+
+		float dt = (now - last_t) / 1000.0f;   // seconds
+		if (dt <= 0.0f)
+			dt = 0.004f;           // fallback
+		last_t = now;
+
 		if (crsf.data.valid && (now - crsf.data.lastUpdate) > 100) { // e.g. 100 ms
 			crsf.data.valid = false;
 		}
@@ -214,7 +219,6 @@ int main(void) {
 			float m3 = throttle - roll_out - pitch_out - yaw_out; // rear-left
 			float m4 = throttle + roll_out - pitch_out + yaw_out; // rear-right
 
-
 			if (m1 < 1000)
 				m1 = 1000;
 			else if (m1 > 2000)
@@ -232,7 +236,6 @@ int main(void) {
 			else if (m4 > 2000)
 				m4 = 2000;
 
-
 			ESC_Write_us(&htim3, TIM_CHANNEL_1, (uint16_t) m1);
 			ESC_Write_us(&htim2, TIM_CHANNEL_1, (uint16_t) m2);
 			ESC_Write_us(&htim2, TIM_CHANNEL_2, (uint16_t) m3);
@@ -241,7 +244,7 @@ int main(void) {
 		} else {
 			print("waiting CRSF...\r\n");
 		}
-		HAL_Delay(50);
+		HAL_Delay(4);
 
 //
 //		uint32_t now = HAL_GetTick();
@@ -252,7 +255,6 @@ int main(void) {
 //
 //		print_att(&att);
 //
-		HAL_Delay(1);
 	}
 	/* USER CODE END 3 */
 }

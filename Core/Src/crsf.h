@@ -43,8 +43,6 @@ void CRSF_Init(CRSF_t *crsf);
 // Parse one byte from UART ISR
 void CRSF_ParseByte(CRSF_t *crsf, uint8_t byte, uint32_t nowMs);
 
-
-
 // Get latest channels
 const CRSF_Data_t* CRSF_GetData(CRSF_t *crsf);
 

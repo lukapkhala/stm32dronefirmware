@@ -22,10 +22,6 @@ static void crsf_crc_build_table(void) {
 	}
 }
 
-
-
-
-
 // Simple CRC8 (Dallas/Maxim poly 0xD5, same as CRSF)
 static inline uint8_t crsf_crc8(const uint8_t *ptr, uint8_t len) {
 	uint8_t crc = 0;
@@ -49,40 +45,44 @@ void CRSF_Init(CRSF_t *crsf) {
 		crsf->data.channels[i] = 992; // neutral
 }
 
-static void crsf_decode_rc(CRSF_t *crsf, const uint8_t *p, uint8_t len, uint32_t nowMs)
-{
-    // We only need the first N channels.
-    enum { N = CRSF_PARSE_CH };
-    const int need_bits  = 11 * N;
-    const int need_bytes = (need_bits + 7) / 8;   // ceil(need_bits/8)
+static void crsf_decode_rc(CRSF_t *crsf, const uint8_t *p, uint8_t len,
+		uint32_t nowMs) {
+	// We only need the first N channels.
+	enum {
+		N = CRSF_PARSE_CH
+	};
+	const int need_bits = 11 * N;
+	const int need_bytes = (need_bits + 7) / 8;   // ceil(need_bits/8)
 
-    // RC payload is 22 bytes for 16ch; ensure we have enough for the first N
-    if (len < need_bytes) return;
+	// RC payload is 22 bytes for 16ch; ensure we have enough for the first N
+	if (len < need_bytes)
+		return;
 
-    uint32_t acc = 0;
-    int bits = 0, k = 0;
+	uint32_t acc = 0;
+	int bits = 0, k = 0;
 
-    // Only ingest as many bytes as needed to extract the first N channels
-    for (int i = 0; i < need_bytes; i++) {
-        acc  |= (uint32_t)p[i] << bits;
-        bits += 8;
-        while (bits >= 11 && k < N) {
-            crsf->data.channels[k++] = 1000 + (((uint16_t)(acc & 0x07FFu) - CRSF_MIN) * 1000.0) / (CRSF_MAX - CRSF_MIN);
+	// Only ingest as many bytes as needed to extract the first N channels
+	for (int i = 0; i < need_bytes; i++) {
+		acc |= (uint32_t) p[i] << bits;
+		bits += 8;
+		while (bits >= 11 && k < N) {
+			crsf->data.channels[k++] = 1000
+					+ (((uint16_t) (acc & 0x07FFu) - CRSF_MIN) * 1000.0)
+							/ (CRSF_MAX - CRSF_MIN);
 
-            acc >>= 11;
-            bits -= 11;
-        }
-    }
+			acc >>= 11;
+			bits -= 11;
+		}
+	}
 
-    // (Optional) keep the rest at neutral so readers don't see stale values
-    for (int i = N; i < CRSF_NUM_CHANNELS; i++) {
-        crsf->data.channels[i] = 992;
-    }
+	// (Optional) keep the rest at neutral so readers don't see stale values
+	for (int i = N; i < CRSF_NUM_CHANNELS; i++) {
+		crsf->data.channels[i] = 992;
+	}
 
-    crsf->data.lastUpdate = nowMs;
-    crsf->data.valid = true;
+	crsf->data.lastUpdate = nowMs;
+	crsf->data.valid = true;
 }
-
 
 void CRSF_ParseByte(CRSF_t *crsf, uint8_t byte, uint32_t nowMs) {
 	// Inter-byte timeout resync
