@@ -32,3 +32,8 @@ float PID_Update(PID_t *pid, float error, float dt) {
 
 	return output;
 }
+
+void PID_Reset(PID_t *pid) {
+	pid->integrator = 0.0f;
+	pid->prev_error = 0.0f;
+}
