@@ -23,6 +23,7 @@
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
 #include <string.h>
+#include <stdint.h>
 
 #include "filter.h"
 #include "crsf.h"
@@ -36,7 +37,8 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define DT_FALLBACK_SECONDS 0.004f
+#define DT_MAX_SECONDS      0.02f
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -77,8 +79,31 @@ static void MX_TIM2_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+static float compute_dt_seconds(uint32_t now, uint32_t last_ms)
+{
+        uint32_t delta_ms;
+
+        if (now >= last_ms) {
+                delta_ms = now - last_ms;
+        } else {
+                delta_ms = (uint32_t) ((uint64_t) now + (uint64_t) (UINT32_MAX - last_ms) + 1u);
+        }
+
+        if (delta_ms == 0u) {
+                return DT_FALLBACK_SECONDS;
+        }
+
+        float dt = (float) delta_ms / 1000.0f;
+
+        if (dt > DT_MAX_SECONDS) {
+                dt = DT_MAX_SECONDS;
+        }
+
+        return dt;
+}
+
 void print(const char *s) {
-	HAL_UART_Transmit(&huart2, (uint8_t*) s, strlen(s), HAL_MAX_DELAY);
+        HAL_UART_Transmit(&huart2, (uint8_t*) s, strlen(s), HAL_MAX_DELAY);
 }
 
 void print_icm_data(icm_scaled_t *data) {
@@ -189,10 +214,8 @@ int main(void) {
 		/* USER CODE BEGIN 3 */
 		uint32_t now = HAL_GetTick();
 
-		float dt = (now - last_t) / 1000.0f;   // seconds
-		if (dt <= 0.0f)
-			dt = 0.004f;           // fallback
-		last_t = now;
+                float dt = compute_dt_seconds(now, last_t);
+                last_t = now;
 
 		if (crsf.data.valid && (now - crsf.data.lastUpdate) > 100) { // e.g. 100 ms
 			crsf.data.valid = false;
