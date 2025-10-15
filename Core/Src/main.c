@@ -24,6 +24,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>
+#include <stdbool.h>
 
 #include "filter.h"
 #include "crsf.h"
@@ -37,8 +38,9 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define DT_FALLBACK_SECONDS 0.004f
-#define DT_MAX_SECONDS      0.02f
+#define DT_FALLBACK_SECONDS           0.004f
+#define DT_MAX_SECONDS                0.02f
+#define THROTTLE_ACTIVE_THRESHOLD_US  1050.0f
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -221,52 +223,63 @@ int main(void) {
 			crsf.data.valid = false;
 		}
 
-		if (crsf.data.valid) {
-			float target_roll_rate = rc_to_rate(crsf.data.channels[0], 200.0f);
-			float target_pitch_rate = rc_to_rate(crsf.data.channels[1], 200.0f);
-			float target_yaw_rate = rc_to_rate(crsf.data.channels[3], 200.0f);
-			float throttle = crsf.data.channels[2]; // 1000–2000 µs
+                if (crsf.data.valid) {
+                        float target_roll_rate = rc_to_rate(crsf.data.channels[0], 200.0f);
+                        float target_pitch_rate = rc_to_rate(crsf.data.channels[1], 200.0f);
+                        float target_yaw_rate = rc_to_rate(crsf.data.channels[3], 200.0f);
+                        float throttle = crsf.data.channels[2]; // 1000–2000 µs
 
-			ICM_read_all(&hspi1, &data);
+                        ICM_read_all(&hspi1, &data);
 
-			float roll_error = target_roll_rate - data.gx;
-			float pitch_error = target_pitch_rate - data.gy;
-			float yaw_error = target_yaw_rate - data.gz;
+                        if (throttle <= THROTTLE_ACTIVE_THRESHOLD_US) {
+                                PID_Reset(&pid_roll);
+                                PID_Reset(&pid_pitch);
+                                PID_Reset(&pid_yaw);
 
-			float roll_out = PID_Update(&pid_roll, roll_error, dt);
-			float pitch_out = PID_Update(&pid_pitch, pitch_error, dt);
-			float yaw_out = PID_Update(&pid_yaw, yaw_error, dt);
+                                ESC_Write_us(&htim3, TIM_CHANNEL_1, 1000);
+                                ESC_Write_us(&htim2, TIM_CHANNEL_1, 1000);
+                                ESC_Write_us(&htim2, TIM_CHANNEL_2, 1000);
+                                ESC_Write_us(&htim2, TIM_CHANNEL_3, 1000);
+                        } else {
+                                float roll_error = target_roll_rate - data.gx;
+                                float pitch_error = target_pitch_rate - data.gy;
+                                float yaw_error = target_yaw_rate - data.gz;
 
-			float m1 = throttle + roll_out + pitch_out - yaw_out; // front-right
-			float m2 = throttle - roll_out + pitch_out + yaw_out; // front-left
-			float m3 = throttle - roll_out - pitch_out - yaw_out; // rear-left
-			float m4 = throttle + roll_out - pitch_out + yaw_out; // rear-right
+                                float roll_out = PID_Update(&pid_roll, roll_error, dt);
+                                float pitch_out = PID_Update(&pid_pitch, pitch_error, dt);
+                                float yaw_out = PID_Update(&pid_yaw, yaw_error, dt);
 
-			if (m1 < 1000)
-				m1 = 1000;
-			else if (m1 > 2000)
-				m1 = 2000;
-			if (m2 < 1000)
-				m2 = 1000;
-			else if (m2 > 2000)
-				m2 = 2000;
-			if (m3 < 1000)
-				m3 = 1000;
-			else if (m3 > 2000)
-				m3 = 2000;
-			if (m4 < 1000)
-				m4 = 1000;
-			else if (m4 > 2000)
-				m4 = 2000;
+                                float m1 = throttle + roll_out + pitch_out - yaw_out; // front-right
+                                float m2 = throttle - roll_out + pitch_out + yaw_out; // front-left
+                                float m3 = throttle - roll_out - pitch_out - yaw_out; // rear-left
+                                float m4 = throttle + roll_out - pitch_out + yaw_out; // rear-right
 
-			ESC_Write_us(&htim3, TIM_CHANNEL_1, (uint16_t) m1);
-			ESC_Write_us(&htim2, TIM_CHANNEL_1, (uint16_t) m2);
-			ESC_Write_us(&htim2, TIM_CHANNEL_2, (uint16_t) m3);
-			ESC_Write_us(&htim2, TIM_CHANNEL_3, (uint16_t) m4);
+                                if (m1 < 1000)
+                                        m1 = 1000;
+                                else if (m1 > 2000)
+                                        m1 = 2000;
+                                if (m2 < 1000)
+                                        m2 = 1000;
+                                else if (m2 > 2000)
+                                        m2 = 2000;
+                                if (m3 < 1000)
+                                        m3 = 1000;
+                                else if (m3 > 2000)
+                                        m3 = 2000;
+                                if (m4 < 1000)
+                                        m4 = 1000;
+                                else if (m4 > 2000)
+                                        m4 = 2000;
 
-		} else {
-			print("waiting CRSF...\r\n");
-		}
+                                ESC_Write_us(&htim3, TIM_CHANNEL_1, (uint16_t) m1);
+                                ESC_Write_us(&htim2, TIM_CHANNEL_1, (uint16_t) m2);
+                                ESC_Write_us(&htim2, TIM_CHANNEL_2, (uint16_t) m3);
+                                ESC_Write_us(&htim2, TIM_CHANNEL_3, (uint16_t) m4);
+                        }
+
+                } else {
+                        print("waiting CRSF...\r\n");
+                }
 		HAL_Delay(4);
 
 //
