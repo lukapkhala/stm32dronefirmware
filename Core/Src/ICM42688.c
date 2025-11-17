@@ -8,11 +8,11 @@
 #include "ICM42688.h"
 
 void ICM_CS_LOW() {
-	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_RESET);
+	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
 }
 
 void ICM_CS_HIGH() {
-	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_6, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
 }
 
 void ICM_soft_reset(SPI_HandleTypeDef *spi) {
@@ -20,49 +20,55 @@ void ICM_soft_reset(SPI_HandleTypeDef *spi) {
 	ICM_CS_LOW();
 	HAL_SPI_Transmit(spi, wr, 2, HAL_MAX_DELAY);
 	ICM_CS_HIGH();
-	HAL_Delay(1);
+	HAL_Delay(15);
 }
 
 static void ICM_enable_sensors(SPI_HandleTypeDef *spi) {
-	uint8_t wr[2] = { 0x4E, 0x0F }; // accel LN + gyro LN
+	// ENABLING ONLY GYRO
+	uint8_t wr[2] = { 0x4E, 0x0C }; // gyro LN
 	ICM_CS_LOW();
 	HAL_SPI_Transmit(spi, wr, 2, HAL_MAX_DELAY);
 	ICM_CS_HIGH();
 	HAL_Delay(1); // datasheet: wait >=200 µs
 }
 
-static void ICM_config_accel(SPI_HandleTypeDef *spi) {
-	uint8_t wr[2] = { 0x50, 0x06 }; // ±2 g, 1 kHz
-	ICM_CS_LOW();
-	HAL_SPI_Transmit(spi, wr, 2, HAL_MAX_DELAY);
-	ICM_CS_HIGH();
-	HAL_Delay(1);
-}
+//static void ICM_config_accel(SPI_HandleTypeDef *spi) {
+//	uint8_t wr[2] = { 0x50, 0x06 }; // ±2 g, 1 kHz
+//	ICM_CS_LOW();
+//	HAL_SPI_Transmit(spi, wr, 2, HAL_MAX_DELAY);
+//	ICM_CS_HIGH();
+//	HAL_Delay(1);
+//}
 
 static void ICM_config_gyro(SPI_HandleTypeDef *spi) {
-	uint8_t wr[2] = { 0x4F, 0x06 }; // ±2000 dps, 1 kHz
+	uint8_t wr1[2] = { 0x4F, 0x06 }; // ±2000 dps, 1 kHz
+	uint8_t wr2[2] = { 0x51, 0x06 }; // low-pass filter
 	ICM_CS_LOW();
-	HAL_SPI_Transmit(spi, wr, 2, HAL_MAX_DELAY);
+	HAL_SPI_Transmit(spi, wr1, 2, HAL_MAX_DELAY);
+	ICM_CS_HIGH();
+	HAL_Delay(1);
+
+	ICM_CS_LOW();
+	HAL_SPI_Transmit(spi, wr2, 2, HAL_MAX_DELAY);
 	ICM_CS_HIGH();
 	HAL_Delay(1);
 }
 
 static void ICM_callib_gyro(SPI_HandleTypeDef *spi, icm_scaled_t *data) {
-	icm_scaled_t callib;
-	uint32_t start = HAL_GetTick();
-	data->gxc = data->gyc = data->gzc = 0;
+	icm_scaled_t callib = {0};
 
-	int calnum = 0;
-	while ((HAL_GetTick() - start) < 1000) {
+    data->gxc = data->gyc = data->gzc = 0;
+    float N = 2500;
+	for(int i = 0; i < N; i++){
 		ICM_read(spi, &callib);
 		data->gxc += callib.gx;
 		data->gyc += callib.gy;
 		data->gzc += callib.gz;
-		calnum++;
+		HAL_Delay(1);
 	}
-	data->gxc /= calnum;
-	data->gyc /= calnum;
-	data->gzc /= calnum;
+	data->gxc /= N;
+	data->gyc /= N;
+	data->gzc /= N;
 }
 
 int ICM_init(SPI_HandleTypeDef *spi, icm_scaled_t *data) {
@@ -91,8 +97,9 @@ int ICM_init(SPI_HandleTypeDef *spi, icm_scaled_t *data) {
 
 	ICM_enable_sensors(spi);
 	ICM_config_gyro(spi);
-	ICM_config_accel(spi);
 
+
+	HAL_Delay(100);
 	ICM_callib_gyro(spi, data);
 	return 0;
 }
@@ -127,9 +134,11 @@ void ICM_read(SPI_HandleTypeDef *spi, icm_scaled_t *data) {
 }
 
 void ICM_read_all(SPI_HandleTypeDef *spi, icm_scaled_t *data) {
-	ICM_read(spi, data);
-	data->gx -= data->gxc;
-	data->gy -= data->gyc;
-	data->gz -= data->gzc;
+    icm_scaled_t raw;
+    ICM_read(spi, &raw);
+
+    data->gx = raw.gx - data->gxc;
+    data->gy = raw.gy - data->gyc;
+    data->gz = raw.gz - data->gzc;
 }
 

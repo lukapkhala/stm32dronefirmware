@@ -5,7 +5,7 @@ from collections import deque
 import numpy as np
 
 # --- Serial setup ---
-SERIAL_PORT = "COM11"   # your port
+SERIAL_PORT = "COM5"   # your port
 BAUD_RATE = 115200
 ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
 
@@ -34,7 +34,7 @@ def update():
         line = ser.readline().decode(errors="ignore").strip()
         if line.startswith("Roll:"):
             try:
-                # Example: "Roll: 12.34 Pitch: -7.89"
+
                 parts = line.replace("Roll:", "").replace("Pitch:", "").split()
                 roll, pitch = float(parts[0]), float(parts[1])
                 roll_data.append(roll)

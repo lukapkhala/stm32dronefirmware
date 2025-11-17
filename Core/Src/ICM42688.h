@@ -8,7 +8,7 @@
 #ifndef SRC_ICM42688_H_
 #define SRC_ICM42688_H_
 
-#include "stm32f4xx_hal.h"  // HAL_GPIO_WritePin, GPIOx definitions
+#include "stm32h7xx_hal.h"  // For STM32H743 HAL and GPIO macros
 
 #ifndef ICM_CS_GPIO_Port
 #define ICM_CS_GPIO_Port GPIOB

@@ -8,7 +8,8 @@
 #ifndef SRC_CRSF_H_
 #define SRC_CRSF_H_
 
-#include "stm32f4xx_hal.h"
+#include "stm32h7xx_hal.h"  // For STM32H743 HAL and GPIO macros
+
 #include <stdint.h>
 #include <stdbool.h>
 

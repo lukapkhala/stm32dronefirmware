@@ -4,7 +4,7 @@ import re
 import sys
 
 # -------- Serial Setup --------
-PORT = 'COM11'
+PORT = 'COM5'
 BAUD = 115200
 try:
     ser = serial.Serial(PORT, BAUD, timeout=1)

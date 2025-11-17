@@ -12,6 +12,10 @@ typedef struct {
 	float kp, ki, kd;
 	float integrator;
 	float prev_error;
+    float d_filter;
+    float d_cutoff;     // derivative filter coefficient (0.02–0.1 typical)
+    float out_limit;
+    float i_limit;
 } PID_t;
 
 float PID_Update(PID_t *pid, float error, float dt);
