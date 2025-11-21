@@ -8,11 +8,11 @@
 #include "ICM42688.h"
 
 void ICM_CS_LOW() {
-	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, GPIO_PIN_RESET);
 }
 
 void ICM_CS_HIGH() {
-	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, GPIO_PIN_SET);
 }
 
 void ICM_soft_reset(SPI_HandleTypeDef *spi) {

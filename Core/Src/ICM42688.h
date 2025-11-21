@@ -15,7 +15,7 @@
 #endif
 
 #ifndef ICM_CS_Pin
-#define ICM_CS_Pin       GPIO_PIN_6
+#define ICM_CS_Pin       GPIO_PIN_14
 #endif
 
 typedef struct {
